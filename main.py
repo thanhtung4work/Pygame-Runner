@@ -1,3 +1,4 @@
+import random
 import sys
 
 import pygame
@@ -6,8 +7,10 @@ import pygame
 WIDTH, HEIGHT = (800, 600)
 JUMP_HEIGHT = 20
 OBS_SPEED = 5
+OBS_DEFAULT_SPEED = 5
 OBS_ACCELERATOR = 0.0003
-OBS_MAX_SPEED = 20
+OBS_MAX_SPEED = 25
+SPAWN_TIME = 2000
 # End of contants
 
 # Variables
@@ -24,6 +27,31 @@ def display_score():
     score_rect = score_surf.get_rect(midtop=(WIDTH//2, 40))
     screen.blit(score_surf, score_rect)
     return score
+
+
+def move_obstacles(snail_list):
+    if snail_list:
+        for rect in snail_list:
+            rect.x -= OBS_SPEED
+
+            if rect.midbottom[1] == 400:
+                screen.blit(snail_surf, rect)
+            else:
+                screen.blit(fly_surf, rect)
+        
+        new_list = [rect for rect in snail_list if rect.x > -100]
+
+        return new_list
+    return []
+
+def collide_obstacles(player, obstacles):
+    if len(obstacles) == 0: 
+        return False
+    for obstacle_rect in obstacles:
+        if player.colliderect(obstacle_rect):
+            return True
+    return False
+
 
 pygame.init()
 
@@ -65,7 +93,9 @@ greeting_text_rect = greeting_text_surf.get_rect(midtop=(WIDTH//2, 400))
 ## Snail surface
 snail_surf = pygame.Surface((80, 40))
 snail_surf.fill('plum')
-snail_rect = snail_surf.get_rect(midbottom=(500, 400))
+## Fly surface
+fly_surf = pygame.Surface((60, 20))
+fly_surf.fill('lightslategrey')
 # End of Surface
 
 # Fonts
@@ -74,6 +104,13 @@ text_font = pygame.font.Font(None, 50)
 
 # Pygame clock
 clock = pygame.time.Clock()
+
+# Timers
+obstacle_timer = pygame.USEREVENT + 1
+pygame.time.set_timer(obstacle_timer, SPAWN_TIME)
+
+# Obstacle list
+obstacle_rect_list = []
 
 while True:
     # Events
@@ -87,13 +124,20 @@ while True:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and player_rect.bottom >= ground_rect.top:
                     gravity = -JUMP_HEIGHT
+            if event.type == obstacle_timer:
+                rand_x = random.randint(WIDTH + 100, WIDTH + 300)
+                if random.randint(0, 1):
+                    obstacle_rect_list.append(snail_surf.get_rect(midbottom=(rand_x, 400)))
+                else:
+                    obstacle_rect_list.append(fly_surf.get_rect(midbottom=(rand_x, 260)))
         # Game has stopped
         else:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
-                    snail_rect.x = WIDTH
+                    obstacle_rect_list = []
                     is_active = True
                     start_time = pygame.time.get_ticks()
+                    OBS_SPEED = OBS_DEFAULT_SPEED
     # End of Events
     
     if is_active:
@@ -102,16 +146,13 @@ while True:
         screen.blit(cloud_surf, cloud_rect)
         screen.blit(ground_surf, ground_rect)
         screen.blit(player_surf, player_rect)
-        screen.blit(snail_surf, snail_rect)
         score = display_score()
         # End of Drawing on screen
 
         # Movement
         ## Snail movement
-        OBS_SPEED += OBS_ACCELERATOR
-        snail_rect.x -= min(OBS_SPEED, OBS_MAX_SPEED)
-        if snail_rect.right <=0:
-            snail_rect.right = WIDTH
+        OBS_SPEED = min(OBS_SPEED + OBS_ACCELERATOR, OBS_MAX_SPEED)
+        obstacle_rect_list = move_obstacles(obstacle_rect_list)
         ## Player movement
         gravity += 1
         player_rect.y += gravity
@@ -124,8 +165,7 @@ while True:
         # End of Movement
 
         # Collision
-        if snail_rect.colliderect(player_rect):
-            is_active = False
+        is_active = not collide_obstacles(player_rect, obstacle_rect_list)
     else:
         screen.fill('lightgreen')
         screen.blit(player_surf, player_stand_rect)
